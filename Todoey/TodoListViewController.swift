@@ -10,32 +10,58 @@ import UIKit
 
 class UITodoTableViewController: UITableViewController {
 
-    var itemsArray = ["Item1","item2","item3","item4"]
-    
+    var itemsArray:[TodoItem] = []
+    let defaults = UserDefaults.standard
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         return itemsArray.count
     }
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "TodoItemCell", for: indexPath)
+        let item = itemsArray[indexPath.row]
         
-        cell.textLabel?.text = itemsArray[indexPath.row]
+        cell.textLabel?.text = item.title
+        cell.accessoryType = item.done ? .checkmark : .none
+        
         return cell;
     }
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        deserializeData()
         // Do any additional setup after loading the view.
     }
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        
+
+        itemsArray[indexPath.row].done = !itemsArray[indexPath.row].done
+        serializeData()
+        tableView.reloadData()
         tableView.deselectRow(at: indexPath, animated: true)
-        let cell = tableView.cellForRow(at: indexPath)!
-        if cell.accessoryType == .checkmark {
-            cell.accessoryType = .none
-        } else {
-            cell.accessoryType = .checkmark
+       
+    }
+    
+    let dataFilePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("items.plist")
+    
+    func serializeData(){
+        let encoder = PropertyListEncoder()
+        do {
+            let data = try encoder.encode(itemsArray)
+            try data.write(to: dataFilePath!)
+        } catch{
+            print("Encoding item Array \(error)")
+        }
+        
+    }
+    func deserializeData(){
+        if let data = try? Data(contentsOf: dataFilePath!) {
+            let decoder = PropertyListDecoder()
+            do {
+                self.itemsArray = try decoder.decode([TodoItem].self, from: data)
+            } catch {
+                print("Error while decoding \(error)")
+            }
         }
     }
     //MARK: - Add New Item
@@ -47,10 +73,11 @@ class UITodoTableViewController: UITableViewController {
         
         let action = UIAlertAction(title: "Add Item", style: .default){
             (actoin) in
-            
-            self.itemsArray.append(textField.text!)
-            self.tableView.reloadData()
-            
+            if let title = textField.text {
+                self.itemsArray.append(TodoItem(title))
+                self.tableView.reloadData()
+                self.serializeData()
+            }
         }
         alert.addAction(action)
         alert.addTextField{ (alertTextField) in
