@@ -7,11 +7,14 @@
 //
 
 import UIKit
+import CoreData
 
 class UITodoTableViewController: UITableViewController {
 
     var itemsArray:[TodoItem] = []
     let defaults = UserDefaults.standard
+    let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
+    @IBOutlet weak var searchBar: UISearchBar!
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         return itemsArray.count
     }
@@ -28,15 +31,15 @@ class UITodoTableViewController: UITableViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        deserializeData()
+        fetchData()
+//        searchBar.delegate = self;
         // Do any additional setup after loading the view.
     }
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
 
         itemsArray[indexPath.row].done = !itemsArray[indexPath.row].done
-        serializeData()
+        saveAllData()
         tableView.reloadData()
         tableView.deselectRow(at: indexPath, animated: true)
        
@@ -44,39 +47,36 @@ class UITodoTableViewController: UITableViewController {
     
     let dataFilePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("items.plist")
     
-    func serializeData(){
-        let encoder = PropertyListEncoder()
+    func saveAllData(){
         do {
-            let data = try encoder.encode(itemsArray)
-            try data.write(to: dataFilePath!)
-        } catch{
-            print("Encoding item Array \(error)")
+            try context.save()
+        } catch {
+            print(" Error while persisting tha data \(error)")
         }
-        
     }
-    func deserializeData(){
-        if let data = try? Data(contentsOf: dataFilePath!) {
-            let decoder = PropertyListDecoder()
-            do {
-                self.itemsArray = try decoder.decode([TodoItem].self, from: data)
-            } catch {
-                print("Error while decoding \(error)")
-            }
+    
+    func fetchData(with request: NSFetchRequest<TodoItem> = TodoItem.fetchRequest()){
+        do {
+            itemsArray = try context.fetch(request)
+        } catch {
+            print("Error while fetching \(error)")
         }
     }
     //MARK: - Add New Item
     
     @IBAction func addButtonPressed(_ sender: Any) {
         var textField = UITextField()
-        
         let alert = UIAlertController(title: "Add New Todoey Item", message: "", preferredStyle: .alert)
         
         let action = UIAlertAction(title: "Add Item", style: .default){
             (actoin) in
             if let title = textField.text {
-                self.itemsArray.append(TodoItem(title))
+                let item = TodoItem(context: self.context)
+                item.title = title
+                item.done = false
+                self.itemsArray.append(item)
                 self.tableView.reloadData()
-                self.serializeData()
+                self.saveAllData()
             }
         }
         alert.addAction(action)
@@ -88,5 +88,32 @@ class UITodoTableViewController: UITableViewController {
     }
     
 
+    
 }
 
+extension UITodoTableViewController: UISearchBarDelegate {
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        let request: NSFetchRequest<TodoItem> = TodoItem.fetchRequest()
+        if let text = searchBar.text{
+            if text.count > 0 {
+                request.predicate = NSPredicate(format: "title CONTAINS[cd] %@", text)
+                request.sortDescriptors = [NSSortDescriptor(key: "title", ascending: true)]
+                fetchData(with: request)
+                
+            } else {
+                fetchData()
+            }
+        } else {
+            fetchData()
+        }
+        tableView.reloadData()
+    }
+    
+    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        
+        if searchBar.text?.count == 0 {
+            fetchData()
+            tableView.reloadData()
+        }
+    }
+}
